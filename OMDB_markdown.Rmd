@@ -1,0 +1,278 @@
+---
+title: "Cinefinder- A movie database"
+author: "Sudhir Voleti"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Back Story
+
+Ever tried finding info about a movie online? It's kind of a mess. You start on one website for ratings, hop to another for cast details, and end up somewhere else just to figure out what the movie's actually about. Before you know it, you've got five tabs open just to learn about one film. And let's be honest - most movie websites are cluttered with pop-ups, ads, and way more information than you need. Whether you're just curious about that film your friend mentioned or trying to pick something for movie night, finding basic movie details shouldn't feel like a digital scavenger hunt. That's where CineFinder comes in - putting all the movie info you actually care about in one clean, simple place.
+
+Lets build an app which can list all the movie details if you search only by name!
+
+## Step-by-Step Implementation
+
+## Basic Prompt
+```r
+Can you build an R shiny app where it fetches the movies data from omdb. I have api key also. In the UI lets pick only search movies name by title. The output should be in a tabular format in the app. Return all the values in the column.
+```
+### How to get the API key
+
+-Visit the Website: Go to OMDB API Key Page.
+-Select Free Option: On the page, select the Free plan option.
+-Enter Email: Provide your email address in the required field.
+-Submit: Click the Submit button to complete the process.
+After submission, you'll receive the API key via email. Use this key in your app to access OMDB's services.
+
+# Response from LLM
+
+The LLM will now generate the code. Lets copy and paste the code in your R-studio. Now run the application
+
+
+```{r out.width = "800px", echo=FALSE}
+knitr::include_graphics('AH2.png')
+```
+
+
+
+Voila! 
+
+It came as we expected! Now picture this: You're desperately trying to find that movie about the big blue aliens (Avatar), but you typed 'Avtar' instead. *BUZZ* - Wrong! Our app just stares at you blankly like a student during an 8 AM lecture. Or maybe you're looking for that Christopher Nolan movie about dreams within dreams, but can't quite remember if it's "Inception" or "Inseption." Well, tough luck! Our app is like that strict grammar teacher who won't accept any spelling mistakes.
+
+And oh, you want to find "movies like Inception"? Sorry, our basic app just tilts its head like a confused puppy. "Just type the exact movie name, please!" it says, with all the flexibility of a cafeteria menu.
+
+BUT WAIT!
+
+What if I told you we could make our app smarter? Like "went-to-college" smarter? Enter LangChain - our new best friend in the world of movie searching!
+
+With LangChain's query construction, our app just got a major upgrade. It's like giving your strict librarian a chill pill and some AI smarts. Now you can:
+
+- Search for "sci-fi movies from the 90s" without listing every single movie from that decade
+- Ask for "movies like The Matrix" without getting the "Does not compute" response
+- Type "that movie with the guy from Top Gun" and actually get results
+- Even find "sad movies with good ratings" when you're in the mood for a good cry during finals week
+
+It's like upgrading from a bicycle to a Tesla - same destination, way cooler journey! And the best part? No more playing "Spelling Bee Champion" every time you want to find a movie.
+
+So, what do you say? Ready to ditch the "spell-it-perfectly-or-else" version and upgrade to our new, understanding, and slightly less judgmental movie search? Because let's face it - life's too short to remember how to spell "Schwarzenegger" correctly! 
+
+Remember, before: "Input 'The Pursuit of Happyness' with exact spelling"
+Now: "Show me Will Smith movies about dads" - BOOM! 🎯
+
+Welcome to the future of movie searching, where we speak human, not robot! 🤖✨"
+
+## Lets Reprompt it
+
+```r
+Lets use query construction with langchain here in this use case. Analyze the user's natural language query to extract relevant parameters like title, genre, year, director, actors, and type  Read: https://medium.com/munchy-bytes/constructing-queries-with-langchain-5e3ded7d0c1e
+```
+With GPT-4's web-searching capability, it can leverage external URLs, such as LangChain's query construction documentation, to dynamically extract relevant details and implement query construction.
+
+## Response from LLMs (with complete code)
+
+Ensure that the necessary packages are installed for the app to function correctly. These include `shiny`, `httr`, `jsonlite`, `reticulate`
+Lets check whether the packages are installed or not
+
+```r
+library(shiny)
+library(httr)
+library(jsonlite)
+library(reticulate)
+
+# Configure Python environment
+python_path <- "C:/Users/31885/AppData/Local/Programs/Python/Python312/python.exe"
+use_python(python_path, required = TRUE)
+
+# Print Python configuration for debugging
+py_config <- reticulate::py_config()
+message("Using Python configuration:")
+message(paste("Python path:", py_config$python))
+
+# Source the Python script (save the MovieQueryEngine class in 'movie_query_engine.py')
+source_python("movie_query_engine.py")
+
+# Initialize the query engine
+query_engine <- NULL  # Will be initialized in server
+
+# Define UI (keeping your existing UI code)
+ui <- fluidPage(
+  tags$head(
+    tags$style(HTML(
+      "body { background-color: #f4f4f9; font-family: Arial, sans-serif; }
+       .title-panel { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+       .sidebar { background-color: #ecf0f1; padding: 15px; border-radius: 8px; }
+       .btn-primary { background-color: #3498db; border: none; }
+       .btn-primary:hover { background-color: #2980b9; }
+       table { border-collapse: collapse; width: 100%; margin-top: 20px; table-layout: fixed; word-wrap: break-word; }
+       th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+       th { background-color: #3498db; color: white; }
+       .table-container { overflow-x: auto; }
+       .alternative-suggestions { margin-top: 15px; padding: 10px; background-color: #fff; border-radius: 4px; }
+      "
+    ))
+  ),
+  
+  titlePanel(div(class = "title-panel", "AI-Powered Movie Search from OMDB")),
+  sidebarLayout(
+    sidebarPanel(
+      div(class = "sidebar",
+          textAreaInput("search_query", "Describe the movie you're looking for:", 
+                        value = "", height = "100px",
+                        placeholder = "E.g., 'That sci-fi movie from the 90s with aliens and Will Smith'"),
+          actionButton("search_button", "Search", class = "btn-primary"),
+          br(), br(),
+          actionButton("show_posters", "Show Poster", class = "btn-primary"),
+          uiOutput("poster_output"),
+          br(), br(),
+          verbatimTextOutput("constructed_query"),
+          div(class = "alternative-suggestions",
+              uiOutput("alternative_suggestions"))
+      )
+    ),
+    mainPanel(
+      div(class = "table-container", tableOutput("movie_table"))
+    )
+  )
+)
+
+# Define server logic
+server <- function(input, output, session) {
+  # Initialize query engine with your OpenAI API key
+  query_engine <<- MovieQueryEngine("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")  # Replace with your API key
+  
+  # Reactive values
+  movies_data <- reactiveVal(NULL)
+  posters_data <- reactiveVal(NULL)
+  constructed_query <- reactiveVal("")
+  alternative_titles <- reactiveVal(NULL)
+  
+  observeEvent(input$search_button, {
+    req(input$search_query)
+    
+    # Construct query using Python class
+    query <- query_engine$construct_query(input$search_query)
+    constructed_query(query)
+    
+    # Get alternative suggestions
+    alternatives <- query_engine$suggest_alternatives(input$search_query)
+    alternative_titles(alternatives)
+    
+    # OMDB API endpoint and key
+    api_key <- "f3ba2f8b"  # Replace with your OMDB API key
+    base_url <- "http://www.omdbapi.com/?"
+    
+    # Make API request with constructed query
+    response <- GET(base_url, query = list(apikey = api_key, t = query))
+    
+    if (response$status_code == 200) {
+      data <- fromJSON(content(response, "text"), flatten = TRUE)
+      
+      if (!is.null(data$Title)) {
+        movies_data(data.frame(
+          Title = data$Title,
+          Year = data$Year,
+          Rated = data$Rated,
+          Released = data$Released,
+          Runtime = data$Runtime,
+          Genre = data$Genre,
+          Director = data$Director,
+          Writer = data$Writer,
+          Actors = data$Actors,
+          Plot = data$Plot,
+          Language = data$Language,
+          Country = data$Country,
+          Awards = data$Awards,
+          imdbRating = data$imdbRating,
+          imdbVotes = data$imdbVotes,
+          Type = data$Type,
+          BoxOffice = data$BoxOffice,
+          Website = data$Website,
+          stringsAsFactors = FALSE
+        ))
+        posters_data(if (data$Poster != "N/A") paste0("<img src=\"", data$Poster, "\" height=\"300\">") else "No Poster Available")
+      } else {
+        showNotification("No movies found.", type = "error")
+        movies_data(NULL)
+        posters_data(NULL)
+      }
+    } else {
+      showNotification("Error fetching data from OMDB.", type = "error")
+    }
+  })
+  
+  # Display constructed query
+  output$constructed_query <- renderText({
+    if (constructed_query() != "") {
+      paste("Constructed search:", constructed_query())
+    }
+  })
+  
+  # Display alternative suggestions
+  output$alternative_suggestions <- renderUI({
+    alternatives <- alternative_titles()
+    if (!is.null(alternatives) && length(alternatives) > 0) {
+      tagList(
+        h4("Alternative Suggestions:"),
+        tags$ul(
+          lapply(alternatives, function(title) {
+            tags$li(
+              actionLink(
+                inputId = paste0("alt_", gsub("[^[:alnum:]]", "", title)),
+                label = title,
+                onclick = sprintf("Shiny.setInputValue('search_query', '%s');", title)
+              )
+            )
+          })
+        )
+      )
+    }
+  })
+  
+  # Render movie table
+  output$movie_table <- renderTable({
+    movies_data()
+  }, rownames = FALSE)
+  
+  # Render posters
+  observeEvent(input$show_posters, {
+    output$poster_output <- renderUI({
+      if (!is.null(posters_data())) {
+        HTML(posters_data())
+      }
+    })
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+
+### 5. Run the Application
+
+Run the application using:
+
+```r
+shinyApp(ui = ui, server = server)
+```
+
+```{r out.width = "800px", echo=FALSE}
+knitr::include_graphics('AH3.png')
+```
+
+Now we got the movie we wanted by simply searching it with natural language.
+
+Thats it for today!
+
+Goodbye
+
+
+```{r, echo=FALSE, results='asis'}
+cat('
+<video width="640" height="360" controls>
+  <source src="OMDB_tutorial.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+')
+```
+
